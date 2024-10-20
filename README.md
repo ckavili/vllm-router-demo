@@ -7,11 +7,15 @@
 
 **UI(openwebui.com) -> LiteLLM + Semantic Router -> vLLM with LORA adapters**
 
-### Deploying and Configuring vLLM 
+### Deploying and Configuring vLLM
+
 ```
 oc create secret generic vllm-secrets --from-literal=HUGGING_FACE_HUB_TOKEN=hf_.....
-oc apply -f vllm-pvc.yaml vllm-service.yaml vllm-route.yaml vllm-deployment.yaml 
 ``` 
+
+```
+helm install dynamicdemo . -n <your-namespace>
+```
 
 ### Downloading the models
 As this is a demo the models have to be downloaded manually and uploaded to the PVC. 
@@ -30,36 +34,10 @@ These need to be downloaded and stored in the **/models-cache/lora/** directory 
 > [!NOTE] 
 > The **lora** sub-directory will need to be created beforehand.
 
-### Chat Prompt
 
-A recent change in the tranformers framework results in an error being thrown if a models _chat template_ isn't present in the model configuration. To overcome this we configure vLLM to use a default chat template. However this template needs to be uploaded and stored on the PVC e.g. **/models-cache/prompt/chat.jinja**
+## Test locally
 
-> [!NOTE] 
-> The **prompt** sub-directory will need to be created beforehand.
-
-The chat template is stored in the *ocp_resources* directory.
-
-```{yaml}
-      containers:
-      - args:
-        - --model
-        - microsoft/phi-2
-        - --download-dir
-        - /models-cache
-        - --dtype
-        - float16
-        - --max-lora-rank
-        - "64"
-        - --enable-lora
-        - --lora-modules
-        - dcot=/models-cache/lora/phi-2-dcot/
-        - doctor=/models-cache/lora/phi2-doctor28e/
-        - --chat-template
-        - /models-cache/prompt/chat.jinja
-        - --uvicorn-log-level
-        - debug
-```
-
+If you already have a running vLLM somewhere, you can experiment with the rest of the setup in your local machine as below:
 
 ### Running the LiteLLM proxy
 ```
