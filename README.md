@@ -41,7 +41,7 @@ If you already have a running vLLM somewhere, you can experiment with the rest o
 
 ### Running the LiteLLM proxy
 ```
-export BASE_API=https://vllm-xxxxxx-yyy.com/v1/
+export BASE_API=https://vllm-noconnor-test.apps.prod.rhoai.rh-aiservices-bu.com/v1/
 litellm --config litellm-config/pass_through_config.yaml
 ```
 

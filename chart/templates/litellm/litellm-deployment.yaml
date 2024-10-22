@@ -20,6 +20,12 @@ spec:
         args:
           - '--config'
           - /app/proxy_server_config.yaml
+        env:
+        - name: BASE_API
+          valueFrom:
+            configMapKeyRef:
+              name: base-api
+              key: BASE_API
         ports:
         - containerPort: 4000
         volumeMounts:

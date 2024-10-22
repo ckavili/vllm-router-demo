@@ -1,0 +1,41 @@
+---
+apiVersion: serving.kserve.io/v1alpha1
+kind: ServingRuntime
+labels:
+  opendatahub.io/dashboard: "true"
+metadata:
+  annotations:
+    openshift.io/display-name: CUSTOM-vLLM
+  name: my-vllm
+spec:
+  builtInAdapter:
+    modelLoadingTimeoutMillis: 90000
+  containers:
+    - args:
+        - --model
+        - microsoft/phi-2
+        - --download-dir
+        - /models
+        - --dtype
+        - float16
+        - --max-lora-rank
+        - "64"
+        - --enable-lora
+        - --lora-modules
+        - dcot=/models/lora/phi-2-dcot/
+        - doctor=/models/lora/phi2-doctor28e/
+        - --chat-template
+        - /models/prompt/chat.jinja
+        - --uvicorn-log-level
+        - debug
+      image: quay.io/rh-aiservices-bu/vllm-openai-ubi9:0.4.2
+      name: kserve-container
+      ports:
+        - containerPort: 8080
+          name: http1
+          protocol: TCP
+  multiModel: false
+  supportedModelFormats:
+    - autoSelect: true
+      name: pytorch
+

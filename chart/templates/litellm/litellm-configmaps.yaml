@@ -10,3 +10,10 @@ data:
   {{ .name }}: |
   {{- $.Files.Get $path | nindent 4 -}}
 {{- end }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: base-api
+data:
+  BASE_API: "https://vllm-noconnor-test.apps.prod.rhoai.rh-aiservices-bu.com/v1/"

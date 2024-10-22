@@ -3,7 +3,7 @@ model_list:
    litellm_params:
      model: openai/dcot
      api_key: "test2"
-     api_base: https://vllm-noconnor-test.apps.prod.rhoai.rh-aiservices-bu.com/v1/
+     api_base: os.environ/BASE_API
      stop: "<|end of conversation|>" 
     #  roles: {"system":{"pre_message":"[Question] ", "post_message":"<|im_end|>"}, "assistant":{"pre_message":"<|im_start|>assistant\n","post_message":"<|im_end|>"}, "user":{"pre_message":"<|im_start|>user\n","post_message":"<|im_end|>"}}
  - model_name: doctor
