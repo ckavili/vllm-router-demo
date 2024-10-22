@@ -16,7 +16,10 @@ spec:
     spec:
       containers:
       - name: litellm
-        image: ghcr.io/berriai/litellm:main-latest # it is recommended to fix a version generally
+        image: quay.io/ckavili/litellm:main-latest
+        args:
+          - '--config'
+          - /app/proxy_server_config.yaml
         ports:
         - containerPort: 4000
         volumeMounts:
@@ -32,9 +35,6 @@ spec:
         - name: custom-router
           mountPath: /app/custom_router.py
           subPath: custom_router.py  
-        envFrom:
-        - secretRef:
-            name: litellm-secrets
       volumes:
         - name: config-volume
           configMap:

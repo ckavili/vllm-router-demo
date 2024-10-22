@@ -1,6 +1,3 @@
-FROM ghcr.io/berriai/litellm-database:main-v1.50.0
+FROM ghcr.io/berriai/litellm:main-latest
 
 RUN pip install semantic_router semantic-router[fastembed]
-
-RUN mkdir -p /.cache
-RUN chmod -R 777 /.cache

@@ -10,7 +10,7 @@ spec:
     - name: http
       protocol: TCP
       port: 4000
-      targetPort: http
+      targetPort: 4000
   type: ClusterIP
   selector:
     app: litellm
