@@ -1,0 +1,700 @@
+---
+# Source: vllm-router-demo/templates/open-webui/open-webui-sa.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: open-webui
+  namespace: noconnor-test
+---
+# Source: vllm-router-demo/templates/vllm/openai-api-secret.yaml
+kind: Secret
+apiVersion: v1
+metadata:
+  name: openai-api-key
+data:
+  OPENAI_API_KEY: "<your-key-base64-format>"
+type: Opaque
+---
+# Source: vllm-router-demo/templates/litellm/litellm-configmaps.yaml
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: custom-auth 
+data:
+  custom_auth.py: |
+    from fastapi import Request
+    from litellm.proxy._types import UserAPIKeyAuth
+    
+    async def user_api_key_auth(request: Request, api_key: str) -> UserAPIKeyAuth: 
+        api_key="noneneeded"
+        return UserAPIKeyAuth(api_key=api_key)
+---
+# Source: vllm-router-demo/templates/litellm/litellm-configmaps.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: custom-callbacks 
+data:
+  custom_callbacks.py: |
+    from litellm.integrations.custom_logger import CustomLogger
+    import litellm
+    
+    # This file includes the custom callbacks for LiteLLM Proxy
+    # Once defined, these can be passed in proxy_config.yaml
+    class MyCustomHandler(CustomLogger):
+        def log_pre_api_call(self, model, messages, kwargs): 
+            print(f"Pre-API Call")
+        
+        def log_post_api_call(self, kwargs, response_obj, start_time, end_time): 
+            print(f"Post-API Call")
+    
+        def log_stream_event(self, kwargs, response_obj, start_time, end_time):
+            print(f"On Stream")
+            
+        def log_success_event(self, kwargs, response_obj, start_time, end_time): 
+            print("On Success")
+    
+        def log_failure_event(self, kwargs, response_obj, start_time, end_time): 
+            print(f"On Failure")
+    
+        async def async_log_success_event(self, kwargs, response_obj, start_time, end_time):
+            print(f"On Async Success!")
+            # log: key, user, model, prompt, response, tokens, cost
+            # Access kwargs passed to litellm.completion()
+            model = kwargs.get("model", None)
+            messages = kwargs.get("messages", None)
+            user = kwargs.get("user", None)
+    
+            # Access litellm_params passed to litellm.completion(), example access `metadata`
+            litellm_params = kwargs.get("litellm_params", {})
+            metadata = litellm_params.get("metadata", {})   # headers passed to LiteLLM proxy, can be found here
+    
+            # Calculate cost using  litellm.completion_cost()
+            cost = litellm.completion_cost(completion_response=response_obj)
+            response = response_obj
+            # tokens used in response 
+            usage = response_obj["usage"]
+    
+            print(
+                f"""
+                    Model: {model},
+                    Messages: {messages},
+                    User: {user},
+                    Usage: {usage},
+                    Cost: {cost},
+                    Response: {response}
+                    Proxy Metadata: {metadata}
+                """
+            )
+            return
+    
+        async def async_log_failure_event(self, kwargs, response_obj, start_time, end_time): 
+            try:
+                print(f"On Async Failure !")
+                print("\nkwargs", kwargs)
+                # Access kwargs passed to litellm.completion()
+                model = kwargs.get("model", None)
+                messages = kwargs.get("messages", None)
+                user = kwargs.get("user", None)
+    
+                # Access litellm_params passed to litellm.completion(), example access `metadata`
+                litellm_params = kwargs.get("litellm_params", {})
+                metadata = litellm_params.get("metadata", {})   # headers passed to LiteLLM proxy, can be found here
+    
+                # Acess Exceptions & Traceback
+                exception_event = kwargs.get("exception", None)
+                traceback_event = kwargs.get("traceback_exception", None)
+    
+                # Calculate cost using  litellm.completion_cost()
+                cost = litellm.completion_cost(completion_response=response_obj)
+                print("now checking response obj")
+                
+                print(
+                    f"""
+                        Model: {model},
+                        Messages: {messages},
+                        User: {user},
+                        Cost: {cost},
+                        Response: {response_obj}
+                        Proxy Metadata: {metadata}
+                        Exception: {exception_event}
+                        Traceback: {traceback_event}
+                    """
+                )
+            except Exception as e:
+                print(f"Exception: {e}")
+    
+    proxy_handler_instance = MyCustomHandler()
+---
+# Source: vllm-router-demo/templates/litellm/litellm-configmaps.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: custom-router 
+data:
+  custom_router.py: |
+    from litellm.integrations.custom_logger import CustomLogger
+    import litellm
+    from litellm.proxy.proxy_server import UserAPIKeyAuth, DualCache
+    from typing import Optional, Literal
+    from semantic_router import Route
+    from semantic_router.layer import RouteLayer
+    from semantic_router.encoders import FastEmbedEncoder
+    import json
+    
+    
+    
+    doctor = Route(
+        name="doctor",
+        utterances=[
+            "I have a pain",
+            "I'm not feeling well",
+            "There's this thing on my",
+            "I need some advice on",
+            "Is there a tablet for",
+        ],
+    )
+    
+    solver = Route(
+        name="dcot",
+        utterances=[
+            "provide a solution",
+            "can you solve the following ",
+            "I have this problem",
+            "what's the best way",
+            "how would you go about",
+        ],
+    )
+    
+    class CustomRouterHandler(CustomLogger):
+        # Class variables or attributes
+        def __init__(self):
+            self.routes = [doctor, solver]
+            self.encoder = FastEmbedEncoder(name="BAAI/bge-small-en-v1.5", score_threshold=0.6)
+            self.routelayer = RouteLayer(encoder=self.encoder, routes=self.routes)
+            pass
+    
+        #### CALL HOOKS - proxy only #### 
+    
+        async def async_pre_call_hook(self, user_api_key_dict: UserAPIKeyAuth, cache: DualCache, data: dict, call_type: Literal[
+                "completion",
+                "text_completion",
+                "embeddings",
+                "image_generation",
+                "moderation",
+                "audio_transcription",
+            ]): 
+            msg = data['messages'][-1]['content']
+            route = self.routelayer(msg)
+            route_metrics = self.routelayer.retrieve_multiple_routes((msg))
+            print(route_metrics)
+            if route_metrics:
+                data["model"] = route.name            
+            else:   
+                print("No specific model found defaulting to Phi2")            
+                data["model"] = "phi2" 
+            print(data["model"])
+            return data 
+    
+        async def async_post_call_failure_hook(
+            self, 
+            request_data: dict,
+            original_exception: Exception, 
+            user_api_key_dict: UserAPIKeyAuth
+        ):
+            pass
+    
+        async def async_post_call_success_hook(
+            self,
+            data: dict,
+            user_api_key_dict: UserAPIKeyAuth,
+            response,
+        ):
+            pass
+    
+        async def async_moderation_hook( # call made in parallel to llm api call
+            self,
+            data: dict,
+            user_api_key_dict: UserAPIKeyAuth,
+            call_type: Literal["completion", "embeddings", "image_generation", "moderation", "audio_transcription"],
+        ):
+            pass
+    
+        async def async_post_call_streaming_hook(
+            self,
+            user_api_key_dict: UserAPIKeyAuth,
+            response: str,
+        ):
+            pass
+    proxy_handler_instance = CustomRouterHandler()
+---
+# Source: vllm-router-demo/templates/litellm/litellm-passthroughconfig.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: litellm-config-file
+data:
+  config.yaml: |
+    model_list:
+     - model_name: dcot
+       litellm_params:
+         model: openai/dcot
+         api_key: "test2"
+         api_base: https://vllm-noconnor-test.apps.prod.rhoai.rh-aiservices-bu.com/v1/
+         stop: "<|end of conversation|>" 
+        #  roles: {"system":{"pre_message":"[Question] ", "post_message":"<|im_end|>"}, "assistant":{"pre_message":"<|im_start|>assistant\n","post_message":"<|im_end|>"}, "user":{"pre_message":"<|im_start|>user\n","post_message":"<|im_end|>"}}
+     - model_name: doctor
+       litellm_params:
+         model: openai/doctor
+         api_key: "fake-key"
+         api_base: os.environ/BASE_API
+         temperature: 0.1
+         stop: '["<|end|>","<|end of conversation|>]' 
+     - model_name: phi2
+       litellm_params:
+         model: openai/microsoft/phi-2
+         api_key: "fake-key"
+         api_base: os.environ/BASE_API
+         bos_token: "<|endoftext|>"
+         eos_token: "<|endoftext|>"
+         stop: "<|end|>"
+    #  - model_name: "main"
+    #    litellm_params:
+    #      model: "*"
+    #      api_key: "fake-key"
+    #      api_base: os.environ/BASE_API
+    general_settings: 
+     master_key: sk-1234 
+     custom_auth: custom_auth.user_api_key_auth
+     log_raw_request_response: True
+     set_verbose: false
+    cache: false
+    litellm_settings: # module level litellm settings - https://github.com/BerriAI/litellm/blob/main/litellm/__init__.py
+      drop_params: True
+      log_raw_request_response: True
+      return_response_headers: true
+      callbacks: custom_router.proxy_handler_instance
+    
+    router_settings:
+      num_retries: 2
+      timeout: 30
+---
+# Source: vllm-router-demo/templates/vllm/chat-template-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: chat-template
+data:
+  chat.jinja: |
+    "{% for message in messages %}{% if message['role'] == 'system' %}{{'<|system|>\n' + message['content'] + '<|end|>\n'}}{% elif message['role'] == 'user' %}{{'<|user|>\n' + message['content'] + '<|end|>\n'}}{% elif message['role'] == 'assistant' %}{{'<|assistant|>\n' + message['content'] + '<|end|>\n'}}{% endif %}{% endfor %}{% if add_generation_prompt %}{{ '<|assistant|>\n' }}{% else %}{{ eos_token }}{% endif %}"
+---
+# Source: vllm-router-demo/templates/vllm/vllm-pvc.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vllm-models-cache
+spec:
+  accessModes:
+    - ReadWriteOnce
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 100Gi
+---
+# Source: vllm-router-demo/templates/open-webui/open-webui-sa.yaml
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: open-webui-anyuid
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:openshift:scc:anyuid
+subjects:
+- kind: ServiceAccount
+  name:  open-webui
+  namespace: test-mlops
+---
+# Source: vllm-router-demo/templates/litellm/litellm-service.yaml
+kind: Service
+apiVersion: v1
+metadata:
+  name: litellm
+  labels:
+    app: litellm
+spec:
+  ports:
+    - name: http
+      protocol: TCP
+      port: 4000
+      targetPort: http
+  type: ClusterIP
+  selector:
+    app: litellm
+---
+# Source: vllm-router-demo/templates/open-webui/open-webui-service.yaml
+kind: Service
+apiVersion: v1
+metadata:
+  name: open-webui
+  labels:
+    app: open-webui
+spec:
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8080
+      targetPort: http
+  type: ClusterIP
+  selector:
+    app: open-webui
+---
+# Source: vllm-router-demo/templates/vllm/vllm-service.yaml
+kind: Service
+apiVersion: v1
+metadata:
+  name: vllm
+  labels:
+    app: vllm
+spec:
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8000
+      targetPort: http
+  type: ClusterIP
+  selector:
+    app: vllm
+---
+# Source: vllm-router-demo/templates/litellm/litellm-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: litellm
+  labels:
+    app: litellm
+spec:
+  selector:
+    matchLabels:
+      app: litellm
+  template:
+    metadata:
+      labels:
+        app: litellm
+    spec:
+      containers:
+      - name: litellm
+        image: ghcr.io/berriai/litellm:main-latest # it is recommended to fix a version generally
+        ports:
+        - containerPort: 4000
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/proxy_server_config.yaml
+          subPath: config.yaml
+        - name: custom-auth
+          mountPath: /app/custom_auth.py
+          subPath: custom_auth.py
+        - name: custom-callbacks
+          mountPath: /app/custom_callbacks.py
+          subPath: custom_callbacks.py
+        - name: custom-router
+          mountPath: /app/custom_router.py
+          subPath: custom_router.py  
+        envFrom:
+        - secretRef:
+            name: litellm-secrets
+      volumes:
+        - name: config-volume
+          configMap:
+            name: litellm-config-file
+        - name: custom-auth
+          configMap:
+            name: custom-auth
+            items:
+              - key: "custom_auth.py"
+                path: "custom_auth.py"
+        - name: custom-callbacks
+          configMap:
+            name: custom-callbacks
+            items:
+              - key: "custom_callbacks.py"
+                path: "custom_callbacks.py"
+        - name: custom-router
+          configMap:
+            name: custom-router
+            items:
+              - key: "custom_router.py"
+                path: "custom_router.py"
+---
+# Source: vllm-router-demo/templates/open-webui/open-webui-deployment.yaml
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: open-webui
+  labels:
+    app: open-webui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: open-webui
+  template:
+    metadata:
+      labels:
+        app: open-webui
+    spec:
+      containers:
+        - name: open-webui
+          env:
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: openai-api-key
+                  key: OPENAI_API_KEY
+            - name: ENABLE_OLLAMA_API
+              value: "false"
+            - name: ENABLE_OPENAI_API
+              value: "true"
+            - name: GLOBAL_LOG_LEVEL
+              value: DEBUG
+            - name: OPENAI_API_BASE_URL
+              value: http://litellm.test-mlops.svc.cluster.local:4000
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - name: open-webui
+              mountPath: /app/backend/data
+          image: 'ghcr.io/open-webui/open-webui:main'
+          securityContext:
+            runAsUser: 0
+      serviceAccountName: open-webui
+      volumes:
+        - name: open-webui
+          persistentVolumeClaim:
+            claimName: open-webui
+---
+# Source: vllm-router-demo/templates/vllm/vllm-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: vllm
+  name: vllm
+  namespace: noconnor-test
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: vllm
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: vllm
+    spec:
+      affinity: {}
+      containers:
+      - args:
+        - --model
+        - microsoft/phi-2
+        - --download-dir
+        - /models-cache
+        - --dtype
+        - float16
+        - --max-lora-rank
+        - "64"
+        - --enable-lora
+        - --lora-modules
+        - dcot=/models-cache/lora/phi-2-dcot/
+        - doctor=/models-cache/lora/phi2-doctor28e/
+        - --chat-template
+        - /models-cache/prompt/chat.jinja
+        - --uvicorn-log-level
+        - debug
+        env:
+        - name: HUGGING_FACE_HUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              key: HUGGING_FACE_HUB_TOKEN
+              name: vllm-secrets
+        - name: HF_HUB_OFFLINE
+          value: "0"
+        - name: VLLM_LOGGING_LEVEL
+          value: DEBUG
+        image: quay.io/modh/vllm:rhoai-2.13
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: http
+            scheme: HTTP
+          periodSeconds: 100
+          successThreshold: 1
+          timeoutSeconds: 8
+        name: server
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: http
+            scheme: HTTP
+          periodSeconds: 30
+          successThreshold: 1
+          timeoutSeconds: 5
+        resources:
+          limits:
+            cpu: "8"
+            memory: 24Gi
+            nvidia.com/gpu: "1"
+          requests:
+            cpu: "6"
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          runAsNonRoot: true
+          seccompProfile:
+            type: RuntimeDefault
+        startupProbe:
+          failureThreshold: 24
+          httpGet:
+            path: /health
+            port: http
+            scheme: HTTP
+          periodSeconds: 30
+          successThreshold: 1
+          timeoutSeconds: 1
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /models-cache
+          name: models-cache
+        - mountPath: /dev/shm
+          name: shm
+        - mountPath: /models-cache/prompt/chat.jinja
+          name: chat-template
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 120
+      tolerations:
+      - effect: NoSchedule
+        key: nvidia.com/gpu
+        operator: Exists
+      volumes:
+      - name: models-cache
+        persistentVolumeClaim:
+          claimName: vllm-models-cache
+      - emptyDir:
+          medium: Memory
+          sizeLimit: 1Gi
+        name: shm
+      - name: chat-template
+        configMap:
+          name: chat-template
+          items:
+            - key: "chat.jinja"
+              path: "chat.jinja"
+---
+# Source: vllm-router-demo/templates/vllm/vllm-route.yaml
+# ---
+# kind: Route
+# apiVersion: route.openshift.io/v1
+# metadata:
+#   name: vllm
+#   labels:
+#     app: vllm
+# spec:
+#   to:
+#     kind: Service
+#     name: vllm
+#     weight: 100
+#   port:
+#     targetPort: http
+#   tls:
+#     termination: edge
+#   wildcardPolicy: None
+---
+# Source: vllm-router-demo/templates/open-webui/open-webui-route.yaml
+kind: Route
+apiVersion: route.openshift.io/v1
+metadata:
+  name: open-webui
+  labels:
+    app: open-webui
+spec:
+  to:
+    kind: Service
+    name: open-webui
+    weight: 100
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+  wildcardPolicy: None
+---
+# Source: vllm-router-demo/templates/vllm/vllm-runtime.yaml.notused
+apiVersion: serving.kserve.io/v1alpha1
+kind: ServingRuntime
+labels:
+  opendatahub.io/dashboard: "true"
+metadata:
+  annotations:
+    openshift.io/display-name: vLLM
+  name: vllm
+spec:
+  builtInAdapter:
+    modelLoadingTimeoutMillis: 90000
+  containers:
+    - args:
+        - --model
+        - /mnt/models/
+        - --download-dir
+        - /models-cache
+        - --port
+        - "8080"
+        - --max-model-len
+        - "6144"
+
+
+        - --model
+        - microsoft/phi-2
+        - --download-dir
+        - /models-cache
+        - --dtype
+        - float16
+        - --max-lora-rank
+        - "64"
+        - --enable-lora
+        - --lora-modules
+        - dcot=/models-cache/lora/phi-2-dcot/
+        - doctor=/models-cache/lora/phi2-doctor28e/
+        - --chat-template
+        - /models-cache/prompt/chat.jinja
+        - --uvicorn-log-level
+        - debug
+      image: quay.io/rh-aiservices-bu/vllm-openai-ubi9:0.4.2
+      name: kserve-container
+      ports:
+        - containerPort: 8080
+          name: http1
+          protocol: TCP
+  multiModel: false
+  supportedModelFormats:
+    - autoSelect: true
+      name: pytorch

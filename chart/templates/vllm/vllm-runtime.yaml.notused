@@ -13,13 +13,21 @@
 #   containers:
 #     - args:
 #         - --model
-#         - /mnt/models/
+#         - microsoft/phi-2
 #         - --download-dir
 #         - /models-cache
-#         - --port
-#         - "8080"
-#         - --max-model-len
-#         - "6144"
+#         - --dtype
+#         - float16
+#         - --max-lora-rank
+#         - "64"
+#         - --enable-lora
+#         - --lora-modules
+#         - dcot=/models-cache/lora/phi-2-dcot/
+#         - doctor=/models-cache/lora/phi2-doctor28e/
+#         - --chat-template
+#         - /models-cache/prompt/chat.jinja
+#         - --uvicorn-log-level
+#         - debug
 #       image: quay.io/rh-aiservices-bu/vllm-openai-ubi9:0.4.2
 #       name: kserve-container
 #       ports:

@@ -30,7 +30,7 @@ spec:
             - name: GLOBAL_LOG_LEVEL
               value: DEBUG
             - name: OPENAI_API_BASE_URL
-              value: http://vllm.{{ .Release.Namespace }}.svc.cluster.local:8000/v1
+              value: http://litellm.{{ .Release.Namespace }}.svc.cluster.local:4000
           ports:
             - name: http
               containerPort: 8080
