@@ -6,36 +6,54 @@ labels:
 metadata:
   annotations:
     openshift.io/display-name: CUSTOM-vLLM
-  name: my-vllm
+  name: vllm
 spec:
   builtInAdapter:
     modelLoadingTimeoutMillis: 90000
   containers:
     - args:
-        - --model
-        - microsoft/phi-2
-        - --download-dir
-        - /models
+        - --model=/mnt/models
+        - --served-model-name={{.Name}}
         - --dtype
         - float16
         - --max-lora-rank
         - "64"
         - --enable-lora
         - --lora-modules
-        - dcot=/models/lora/phi-2-dcot/
-        - doctor=/models/lora/phi2-doctor28e/
+        - dcot=/mnt/models/lora/phi-2-dcot/
+        - doctor=/mnt/models/lora/phi2-doctor28e/
         - --chat-template
-        - /models/prompt/chat.jinja
+        - /prompt/chat.jinja
         - --uvicorn-log-level
         - debug
-      image: quay.io/rh-aiservices-bu/vllm-openai-ubi9:0.4.2
+      command:
+        - python
+        - -m
+        - vllm.entrypoints.openai.api_server
+      image: quay.io/modh/vllm:rhoai-2.13
       name: kserve-container
       ports:
-        - containerPort: 8080
-          name: http1
+        - containerPort: 8000
           protocol: TCP
+      volumeMounts:
+        - mountPath: /dev/shm
+          name: shm
+        - mountPath: /prompt/chat.jinja
+          subPath: chat.jinja
+          name: chat-template
+  volumes:
+    - emptyDir:
+        medium: Memory
+        sizeLimit: 2Gi
+      name: shm
+    - name: chat-template
+      configMap:
+        name: chat-template
+        items:
+          - key: "chat.jinja"
+            path: "chat.jinja"
   multiModel: false
   supportedModelFormats:
     - autoSelect: true
-      name: pytorch
+      name: vLLM
 

@@ -16,4 +16,4 @@ kind: ConfigMap
 metadata:
   name: base-api
 data:
-  BASE_API: "https://vllm-noconnor-test.apps.prod.rhoai.rh-aiservices-bu.com/v1/"
+  BASE_API: "https://vllm-predictor-{{ .Release.Namespace }}.{{ .Values.cluster_domain }}/v1/"
