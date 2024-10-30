@@ -1,17 +1,17 @@
+---
 kind: Route
 apiVersion: route.openshift.io/v1
 metadata:
-  name: vllm
+  name: open-webui
   labels:
-    app: vllm
+    app: open-webui
 spec:
   to:
     kind: Service
-    name: vllm
+    name: open-webui
     weight: 100
   port:
     targetPort: http
   tls:
     termination: edge
   wildcardPolicy: None
-

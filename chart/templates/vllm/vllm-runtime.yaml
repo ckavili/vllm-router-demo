@@ -1,0 +1,59 @@
+---
+apiVersion: serving.kserve.io/v1alpha1
+kind: ServingRuntime
+labels:
+  opendatahub.io/dashboard: "true"
+metadata:
+  annotations:
+    openshift.io/display-name: CUSTOM-vLLM
+  name: vllm
+spec:
+  builtInAdapter:
+    modelLoadingTimeoutMillis: 90000
+  containers:
+    - args:
+        - --model=/mnt/models
+        - --served-model-name={{.Name}}
+        - --dtype
+        - float16
+        - --max-lora-rank
+        - "64"
+        - --enable-lora
+        - --lora-modules
+        - dcot=/mnt/models/lora/phi-2-dcot/
+        - doctor=/mnt/models/lora/phi2-doctor28e/
+        - --chat-template
+        - /prompt/chat.jinja
+        - --uvicorn-log-level
+        - debug
+      command:
+        - python
+        - -m
+        - vllm.entrypoints.openai.api_server
+      image: quay.io/modh/vllm:rhoai-2.13
+      name: kserve-container
+      ports:
+        - containerPort: 8000
+          protocol: TCP
+      volumeMounts:
+        - mountPath: /dev/shm
+          name: shm
+        - mountPath: /prompt/chat.jinja
+          subPath: chat.jinja
+          name: chat-template
+  volumes:
+    - emptyDir:
+        medium: Memory
+        sizeLimit: 2Gi
+      name: shm
+    - name: chat-template
+      configMap:
+        name: chat-template
+        items:
+          - key: "chat.jinja"
+            path: "chat.jinja"
+  multiModel: false
+  supportedModelFormats:
+    - autoSelect: true
+      name: vLLM
+
