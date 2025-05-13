@@ -1,63 +1,64 @@
-# LLM Dynamic Model Demo
 
-* A POC to prove that semantic routing and LORA adapters can work together.
-* Each request is semantically evaluated against pre-configured examples and forwarded onto the correct adapter.
-* Requests which fail the evaluation e.g. the router doesn't know where to route them is forwarded onto the default (Phi2) base model.
+# Dynamic Model Routing with Semantic Evaluation and LoRA Adapters
+Welcome to the LLM Dynamic Model Routing kickstart! Use this to quickly deploy a semantic router with LoRA adapters and a fallback base model using LiteLLM and vLLM.
 
+# Description
+This kickstart demonstrates how to build a cost-efficient and scalable LLM deployment by combining semantic routing, LoRA adapters, and vLLM on Red Hat OpenShift AI. Incoming user requests are processed through LiteLLM, semantically evaluated, and routed to the most appropriate LoRA adapter or the default base model to ensure more precise and context-aware responses without hosting multiple full models.
 
-**UI(openwebui.com) -> LiteLLM + Semantic Router -> vLLM with LORA adapters**
+# See it in action
 
-### Deploying and Configuring vLLM
+# Architecture diagrams
+The architecture integrates several components to ensure efficient request handling and accurate responses. [Open WebUI](https://openwebui.com/) provides an intuitive interface for users to interact smoothly with the system, and [LiteLLM](https://www.litellm.ai/), which acts as a proxy, utilizes the [semantic router](https://github.com/aurelio-labs/semantic-router) to determine which is the most suitable destination—whether it’s the base model or a specialized LoRA adapter. Based on this decision, LiteLLM forwards the request to [vLLM](https://github.com/vllm-project/vllm) for inference.
 
-```
-oc create secret generic vllm-secrets --from-literal=HUGGING_FACE_HUB_TOKEN=hf_.....
-``` 
+![vllm_lora_litellm.jpg](./images/vllm_lora_litellm.jpg)
 
-```
-helm install dynamicdemo . -n <your-namespace>
-```
+# References
+* [Creating cost effective specialized AI solutions with LoRA adapters on Red Hat OpenShift AI
+](https://www.redhat.com/en/blog/creating-cost-effective-specialized-ai-solutions-lora-adapters-red-hat-openshift-ai)
+* https://le.qun.ch/en/blog/2023/09/11/multi-lora-potentials/
+* https://le.qun.ch/en/blog/2023/05/13/transformer-batching/
 
-### Downloading the models
-As this is a demo the models have to be downloaded manually and uploaded to the PVC. 
+# Minimum hardware requirements
 
-### Base Model
-[Phi-2](https://huggingface.co/microsoft/phi-2) from Microsoft is used as the base model.
+# Required software
+- Red Hat OpenShift
+- Red Hat OpenShift AI
+- Dependencies for Single-model server:
+    - Red Hat OpenShift Service Mesh
+    - Red Hat OpenShift Serverless
 
-This needs to be downloaded and stored into the **/models-cache** directory on the *vllm* pod.
+# Required permissions
+- Standard user. No elevated cluster permissions required.
 
-The two _LORA_ adapters used are:
-* [Phi2-Doctor28e](https://huggingface.co/petualang/Phi2-Doctor28e/tree/main)
-* [phi-2-dcot](https://huggingface.co/haritzpuerto/phi-2-dcot)
+# Install
+Let’s dive into the technical aspects of building this setup with a practical example. We are using the [Phi-2](https://huggingface.co/microsoft/phi-2) LLM as the base model, and two LoRA adapters [Phi2-Doctor28e](https://huggingface.co/petualang/Phi2-Doctor28e/tree/main) and [phi-2-dcot](https://huggingface.co/haritzpuerto/phi-2-dcot).
 
-These need to be downloaded and stored in the **/models-cache/lora/** directory on the *vllm* pod.
+This repository packages all the required components as a helm chart, which helps you deploy with one command.
 
-> [!NOTE] 
-> The **lora** sub-directory will need to be created beforehand.
-
-
-## Test locally
-
-If you already have a running vLLM somewhere, you can experiment with the rest of the setup in your local machine as below:
-
-### Running the LiteLLM proxy
-```
-export BASE_API=https://vllm-noconnor-test.apps.prod.rhoai.rh-aiservices-bu.com/v1/
-litellm --config litellm-config/pass_through_config.yaml
+## Clone
+```bash
+git clonse https://github.com/rh-ai-kickstart/vllm-router-demo
+cd vllm-router-demo/chart
 ```
 
-LiteLLM will start listening on **http://localhost:4000**
-
-On startup the proxy will download the _BAAI/bge-small-en-v1.5_ embedding model used in the Semantic Router.
-
-### Running the OpenWebUI component
-```
-podman run -d -p 3000:8080 -e ENABLE_OLLAMA_API=false --net=host -e ENABLE_OPENAI_API=true -e GLOBAL_LOG_LEVEL=DEBUG -e OPENAI_API_KEY=sk-123 -e OPENAI_API_BASE_URL=http://localhost:4000 -v open-webui:/app/backend/data --name open-webui --restart always ghcr.io/open-webui/open-webui:main
+## Create the project
+```bash
+PROJECT="vllm-router-demo-demo"
+oc new-project ${PROJECT}
 ```
 
-The _OpenWebUI_ will be listening on **http://localhost:8080**
-
+## Install with Helm
+```bash
+helm install vllm-router-demo . --set cluster_domain=<apps.clusterxyz.com> --namespace ${PROJECT}
+```
 
 ## Validating the deployment
+After deployment, verify that the setup works as expected by logging into Open WebUI and sending various queries. By checking the LiteLLM logs, you can ensure that requests are correctly routed to either the base model or the relevant adapter.
+
+For instance, in a clinical healthcare scenario, if you ask, “Is there medication for my symptoms?” the query will be routed to the phi-2-doctor adapter. You can then verify the routing by checking the LiteLLM logs, as shown below.
+
+Please keep in mind that while the model may provide useful information, all output should be reviewed for its suitability and it is essential to consult a professional for personalized advice.
+
 To validate the connection between the _openwebui_ and the _litellm_ proxy click on the top left and you should see _phi2_, _dcot_ and _doctor_ models listed.
 
 To validate that the proxy is working take a look at the console logs
@@ -75,13 +76,7 @@ INFO:     127.0.0.1:44268 - "POST /v1/chat/completions HTTP/1.1" 200 OK
 
 The semantic router is invoked by a LiteLLM pre-invoke function and is run before the call to the actual LLM endpoint is made. This functions uses the **semantic router** framework to decide which models the request should be sent to.
 
-The code is located in **litellm-config/custom_router.py**
+The code is located in **litellm-config/custom_router.py** if you'd like to make changes.
 
-# References
-* https://github.com/BerriAI/litellm
-* https://github.com/aurelio-labs/semantic-router/tree/main
-* https://le.qun.ch/en/blog/2023/09/11/multi-lora-potentials/
-* https://le.qun.ch/en/blog/2023/05/13/transformer-batching/
-* https://github.com/kserve/kserve/blob/master/ROADMAP.md
-
-Massive thanks to all these projects and the people involved. 
+# Uninstall
+helm uninstall vllm-router-demo --namespace ${PROJECT} 

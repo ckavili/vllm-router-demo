@@ -40,8 +40,6 @@ spec:
             - name: open-webui
               mountPath: /app/backend/data
           image: 'ghcr.io/open-webui/open-webui:main'
-          securityContext:
-            runAsUser: 0
       serviceAccountName: open-webui
       volumes:
         - name: open-webui

@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: litellm
-        image: quay.io/ckavili/litellm:main-latest
+        image: quay.io/ckavili/litellm:main-latest #image that contains the model and the adapters
         args:
           - '--config'
           - /app/proxy_server_config.yaml
