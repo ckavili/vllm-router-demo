@@ -3,11 +3,8 @@ apiVersion: serving.kserve.io/v1beta1
 kind: InferenceService
 metadata:
   annotations:
-    openshift.io/display-name: vllm
-    serving.knative.openshift.io/enablePassthrough: 'true'
-    sidecar.istio.io/inject: 'true'
-    sidecar.istio.io/rewriteAppHTTPProbers: 'true'
-    # serving.kserve.io/deploymentMode: RawDeployment
+    openshift.io/display-name: phi2-with-adapters
+    serving.kserve.io/deploymentMode: RawDeployment
   name: vllm
   labels:
     opendatahub.io/dashboard: 'true'

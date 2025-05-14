@@ -2,16 +2,22 @@
 apiVersion: serving.kserve.io/v1alpha1
 kind: ServingRuntime
 labels:
-  opendatahub.io/dashboard: "true"
+  opendatahub.io/dashboard: 'true'
 metadata:
   annotations:
-    openshift.io/display-name: CUSTOM-vLLM
+    openshift.io/display-name: 'CUSTOM-vLLM'
+    opendatahub.io/recommended-accelerators: '["nvidia.com/gpu"]'
+    opendatahub.io/apiProtocol: REST
   name: vllm
 spec:
+  annotations:
+    prometheus.io/path: /metrics
+    prometheus.io/port: '8080'
   builtInAdapter:
     modelLoadingTimeoutMillis: 90000
   containers:
     - args:
+        - --port=8080
         - --model=/mnt/models
         - --served-model-name={{.Name}}
         - --dtype
@@ -28,12 +34,12 @@ spec:
         - debug
       command:
         - python
-        - -m
+        - '-m'
         - vllm.entrypoints.openai.api_server
-      image: quay.io/modh/vllm:rhoai-2.13
+      image: quay.io/modh/vllm@sha256:4f550996130e7d16cacb24ca9a2865e7cf51eddaab014ceaf31a1ea6ef86d4ec
       name: kserve-container
       ports:
-        - containerPort: 8000
+        - containerPort: 8080
           protocol: TCP
       volumeMounts:
         - mountPath: /dev/shm

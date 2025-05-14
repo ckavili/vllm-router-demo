@@ -31,6 +31,8 @@ spec:
               value: DEBUG
             - name: OPENAI_API_BASE_URL
               value: http://litellm.{{ .Release.Namespace }}.svc.cluster.local:4000
+            - name: WEBUI_SECRET_KEY
+              value: dummy
           ports:
             - name: http
               containerPort: 8080

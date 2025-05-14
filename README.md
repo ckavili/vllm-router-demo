@@ -19,13 +19,14 @@ The architecture integrates several components to ensure efficient request handl
 * https://le.qun.ch/en/blog/2023/05/13/transformer-batching/
 
 # Minimum hardware requirements
-
+This demo is designed to run a model using GPU acceleration. The following hardware resources are required:
+- CPU: 1 vCPU
+- Memory: 4 GiB
+- GPU: 1 NVIDIA GPU (e.g., A10, A100, L40S, or similar)
+  
 # Required software
 - Red Hat OpenShift
 - Red Hat OpenShift AI
-- Dependencies for Single-model server:
-    - Red Hat OpenShift Service Mesh
-    - Red Hat OpenShift Serverless
 
 # Required permissions
 - Standard user. No elevated cluster permissions required.
@@ -37,11 +38,11 @@ This repository packages all the required components as a helm chart, which help
 
 ## Clone
 ```bash
-git clonse https://github.com/rh-ai-kickstart/vllm-router-demo
+git clone https://github.com/rh-ai-kickstart/vllm-router-demo
 cd vllm-router-demo/chart
 ```
 
-## Create the project
+## Create a project
 ```bash
 PROJECT="vllm-router-demo-demo"
 oc new-project ${PROJECT}
@@ -49,27 +50,28 @@ oc new-project ${PROJECT}
 
 ## Install with Helm
 ```bash
-helm install vllm-router-demo . --set cluster_domain=<apps.clusterxyz.com> --namespace ${PROJECT}
+helm install vllm-router-demo . --namespace ${PROJECT}
 ```
 
 ## Validating the deployment
 After deployment, verify that the setup works as expected by logging into Open WebUI and sending various queries. By checking the LiteLLM logs, you can ensure that requests are correctly routed to either the base model or the relevant adapter.
 
-For instance, in a clinical healthcare scenario, if you ask, “Is there medication for my symptoms?” the query will be routed to the phi-2-doctor adapter. You can then verify the routing by checking the LiteLLM logs, as shown below.
+For instance, in a clinical healthcare scenario, if you ask, “Is there medication for my symptoms?” the query will be routed to the `phi-2-doctor` adapter. You can then verify the routing by checking the LiteLLM logs, as shown below.
 
-Please keep in mind that while the model may provide useful information, all output should be reviewed for its suitability and it is essential to consult a professional for personalized advice.
+_Please keep in mind that while the model may provide useful information, all output should be reviewed for its suitability and it is essential to consult a professional for personalized advice._
 
-To validate the connection between the _openwebui_ and the _litellm_ proxy click on the top left and you should see _phi2_, _dcot_ and _doctor_ models listed.
+To validate the connection between the OpenWebUI and the LiteLLM proxy click on the top left and you should see _phi2_, _dcot_ and _doctor_ models listed. And to confirm that the proxy is working, you should see similar logs like below.
 
-To validate that the proxy is working take a look at the console logs
 ```
-INFO:     127.0.0.1:40130 - "GET /v1/models HTTP/1.1" 200 OK
-[RouteChoice(name='dcot', function_call=None, similarity_score=0.6253249230126284)]
+LiteLLM: Proxy initialized with Config, Set models:
 dcot
-INFO:     127.0.0.1:37520 - "POST /v1/chat/completions HTTP/1.1" 200 OK
-[RouteChoice(name='doctor', function_call=None, similarity_score=0.8541370129211455), RouteChoice(name='dcot', function_call=None, similarity_score=0.7889642869682834)]
 doctor
-INFO:     127.0.0.1:44268 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+phi2
+INFO: 10.131.166.110:55626 - "GET /models HTTP/1.1" 200 OK
+INFO: 10.131.166.110:52568 - "GET /models HTTP/1.1" 200 OK
+[RouteChoice(name='dcot', function_call=None, similarity_score=0.6218189497571418), RouteChoice(name='doctor', function_call=None, similarity_score=0.6802293320602901)]
+doctor
+INFO: 10.131.166.110:52576 - "POST /chat/completions HTTP/1.1" 200 OK
 ```
 
 # Configuring the Semantic Router

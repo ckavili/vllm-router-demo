@@ -57,7 +57,7 @@ class CustomRouterHandler(CustomLogger):
             data["model"] = route.name            
         else:   
             print("No specific model found defaulting to Phi2")            
-            data["model"] = "phi2" 
+            data["model"] = "" 
         print(data["model"])
         return data 
 

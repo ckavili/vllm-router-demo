@@ -16,4 +16,4 @@ kind: ConfigMap
 metadata:
   name: base-api
 data:
-  BASE_API: "https://vllm-predictor-{{ .Release.Namespace }}.{{ .Values.cluster_domain }}/v1/"
+  BASE_API: "http://vllm-predictor.{{ .Release.Namespace }}.svc.cluster.local:8080/v1/"
