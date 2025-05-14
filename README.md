@@ -5,8 +5,6 @@ Welcome to the LLM Dynamic Model Routing kickstart! Use this to quickly deploy a
 # Description
 This kickstart demonstrates how to build a cost-efficient and scalable LLM deployment by combining semantic routing, LoRA adapters, and vLLM on Red Hat OpenShift AI. Incoming user requests are processed through LiteLLM, semantically evaluated, and routed to the most appropriate LoRA adapter or the default base model to ensure more precise and context-aware responses without hosting multiple full models.
 
-# See it in action
-
 # Architecture diagrams
 The architecture integrates several components to ensure efficient request handling and accurate responses. [Open WebUI](https://openwebui.com/) provides an intuitive interface for users to interact smoothly with the system, and [LiteLLM](https://www.litellm.ai/), which acts as a proxy, utilizes the [semantic router](https://github.com/aurelio-labs/semantic-router) to determine which is the most suitable destination—whether it’s the base model or a specialized LoRA adapter. Based on this decision, LiteLLM forwards the request to [vLLM](https://github.com/vllm-project/vllm) for inference.
 
@@ -60,7 +58,7 @@ For instance, in a clinical healthcare scenario, if you ask, “Is there medicat
 
 _Please keep in mind that while the model may provide useful information, all output should be reviewed for its suitability and it is essential to consult a professional for personalized advice._
 
-To validate the connection between the OpenWebUI and the LiteLLM proxy click on the top left and you should see _phi2_, _dcot_ and _doctor_ models listed. And to confirm that the proxy is working, you should see similar logs like below.
+To validate the connection between the OpenWebUI and the LiteLLM proxy click on the top left and you should see _phi2_, _dcot_ and _doctor_ models listed. And to confirm that the proxy is working, you should see similar logs in LiteLLM pod as you ask questions.
 
 ```
 LiteLLM: Proxy initialized with Config, Set models:
@@ -78,7 +76,9 @@ INFO: 10.131.166.110:52576 - "POST /chat/completions HTTP/1.1" 200 OK
 
 The semantic router is invoked by a LiteLLM pre-invoke function and is run before the call to the actual LLM endpoint is made. This functions uses the **semantic router** framework to decide which models the request should be sent to.
 
-The code is located in **litellm-config/custom_router.py** if you'd like to make changes.
+The code is located in [litellm-config/custom_router.py](chart/litellm-configs/custom_router.py) if you'd like to make changes.
 
 # Uninstall
+```bash
 helm uninstall vllm-router-demo --namespace ${PROJECT} 
+```
